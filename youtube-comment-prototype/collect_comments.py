@@ -1,4 +1,5 @@
 import os
+import re
 import pandas as pd
 
 from dotenv import load_dotenv
@@ -9,6 +10,24 @@ load_dotenv()
 API_KEY = os.getenv("YOUTUBE_API_KEY")
 
 youtube = build("youtube", "v3", developerKey=API_KEY)
+
+
+def extract_video_id(url):
+
+    patterns = [
+        r"(?:v=)([a-zA-Z0-9_-]{11})",
+        r"(?:youtu\.be/)([a-zA-Z0-9_-]{11})",
+        r"(?:youtube\.com/shorts/)([a-zA-Z0-9_-]{11})",
+    ]
+
+    for pattern in patterns:
+
+        match = re.search(pattern, url)
+
+        if match:
+            return match.group(1)
+
+    return None
 
 
 def get_video_info(video_id):
@@ -26,7 +45,7 @@ def get_video_info(video_id):
         "video_id": video_id,
         "video_title": snippet["title"],
         "channel_title": snippet["channelTitle"],
-        "published_at": snippet["publishedAt"],
+        "video_published_at": snippet["publishedAt"],
         "video_url": f"https://www.youtube.com/watch?v={video_id}",
     }
 
@@ -34,6 +53,7 @@ def get_video_info(video_id):
 def get_comments(video_id):
 
     comments = []
+
     next_page_token = None
 
     while True:
@@ -73,34 +93,89 @@ def get_comments(video_id):
     return comments
 
 
-video_id = "Je7E8B8AmkQ"
+video_urls = [
+    # TODO: Add your YouTube URLs here
+    "https://www.youtube.com/watch?v=Je7E8B8AmkQ",
+    "https://www.youtube.com/watch?v=BKgAk5vQlko",
+    "https://www.youtube.com/watch?v=yFJDP7OinRM",
+]
 
-video_info = get_video_info(video_id)
 
-if video_info is None:
+all_comments = []
 
-    print("Video not found.")
+for url in video_urls:
 
-else:
+    print("\n========================================")
+    print("Processing:")
+    print(url)
+    print("========================================")
+
+    video_id = extract_video_id(url)
+
+    if video_id is None:
+
+        print("❌ Could not extract video ID.")
+
+        continue
+
+    print(f"Video ID: {video_id}")
+
+    video_info = get_video_info(video_id)
+
+    if video_info is None:
+
+        print("❌ Video not found.")
+
+        continue
+
+    print(f"Title: {video_info['video_title']}")
 
     comments = get_comments(video_id)
 
-    df = pd.DataFrame(comments)
+    print(f"Comments collected: {len(comments)}")
 
-    df["video_title"] = video_info["video_title"]
-    df["channel_title"] = video_info["channel_title"]
-    df["video_published_at"] = video_info["published_at"]
-    df["video_url"] = video_info["video_url"]
+    for comment in comments:
 
-    df.to_csv("comments.csv", index=False, encoding="utf-8-sig")
+        comment["video_title"] = video_info["video_title"]
 
-    print("--------------------------------")
-    print("Collection completed!")
-    print("--------------------------------")
+        comment["channel_title"] = video_info["channel_title"]
 
-    print(f"Video: {video_info['video_title']}")
-    print(f"Channel: {video_info['channel_title']}")
-    print(f"Comments collected: {len(df)}")
+        comment["video_published_at"] = video_info["video_published_at"]
 
-    print("\nFirst 5 comments:")
-    print(df[["text", "like_count", "published_at"]].head())
+        comment["video_url"] = video_info["video_url"]
+
+    all_comments.extend(comments)
+
+
+df = pd.DataFrame(all_comments)
+
+
+if not df.empty:
+
+    df = df.drop_duplicates(subset=["comment_id"])
+
+
+df.to_csv("youtube_comments_raw.csv", index=False, encoding="utf-8-sig")
+
+
+print("\n\n========================================")
+print("COLLECTION COMPLETED")
+print("========================================")
+
+print(f"Videos processed: {len(video_urls)}")
+
+print(f"Total comments: {len(df)}")
+
+print("\nColumns:")
+
+print(df.columns.tolist())
+
+print("\nComments per video:")
+
+if not df.empty:
+
+    print(df.groupby("video_title").size().sort_values(ascending=False))
+
+print("\nDataset saved as:")
+
+print("youtube_comments_raw.csv")
