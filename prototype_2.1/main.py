@@ -19,7 +19,7 @@ from googleapiclient.errors import HttpError
 # ------------------------------------------------------------
 # 1. CONFIGURATION
 # ------------------------------------------------------------
-
+load_dotenv()
 API_KEY = os.getenv("YOUTUBE_API_KEY")
 
 if not API_KEY:
